@@ -32,23 +32,25 @@ def calculate_bungee_diff_squares(
         point_elevation=bungee_position,
         arm_angle=release_angle
     )
+    print(f'x_release: {x_release} \n y_release: {y_release}')
 
     x_firing, y_firing = get_arm_point(
         axle_distance=axle_distance,
         point_elevation=bungee_position,
         arm_angle=firing_angle
     )
+    print(f'x_firing: {x_firing} \n y_firing: {y_firing}')
 
     x_pin = 0.0
     y_pin = pin_elevation
 
-    length_release = math.sqrt((x_pin - x_release) ** 2 + (y_pin - y_release) ** 2)
-    length_firing = math.sqrt((x_pin - x_firing) ** 2 + (y_pin - y_firing) ** 2)
+    length_release = math.sqrt((x_pin - x_release) ** 2 + (y_pin - y_release) ** 2) + math.sqrt(x_pin**2 + y_pin**2)
+    length_firing = math.sqrt((x_pin - x_firing) ** 2 + (y_pin - y_firing) ** 2) + math.sqrt(x_pin**2 + y_pin**2)
 
     s_release = (length_release > rest_length) * (length_release - rest_length)
     s_firing = (length_firing > rest_length) * (length_firing - rest_length)
     print(length_release, length_firing)
-    return s_release ** 2 - s_firing ** 2
+    return (s_release ** 2) - (s_firing ** 2)
 
 
 def calculate_omega(
@@ -70,7 +72,7 @@ def calculate_omega(
     :return: omega: float, in rad/s
     """
     spring_energy = spring_constant * difference_s_squares
-    kinetic_divisor = mass_payload * mass_distance ** 2 + arm_moment_of_inertia
+    kinetic_divisor = mass_payload * (mass_distance ** 2) + arm_moment_of_inertia
     print(difference_s_squares, spring_energy, kinetic_divisor)
     omega = math.sqrt(spring_energy/kinetic_divisor)
     return omega
@@ -100,6 +102,7 @@ def get_arm_point(
     """
     x = - axle_distance + math.cos(math.radians(arm_angle)) * point_elevation
     y = math.sin(math.radians(arm_angle)) * point_elevation
+    print("get arm pos: ", axle_distance, point_elevation, arm_angle, x, y)
     return x, y
 
 
@@ -123,11 +126,12 @@ def calculate_time_to_ground(acceleration_y: float, speed_y_start: float, positi
     :param position_y_start: float, in m
     :return: time: float, s
     """
-    discriminant = speed_y_start ** 2 - 2 * position_y_start * acceleration_y
-    assert discriminant > 0, "Check your vertical acceleration value (should be <0)."
-    time_1 = 1 / (2 * acceleration_y) * (-speed_y_start + math.sqrt(discriminant))
-    time_2 = 1 / (2 * acceleration_y) * (-speed_y_start - math.sqrt(discriminant))
-    assert time_1 < 0, "Make sure the mass start moving above the ground."
+    discriminant = (speed_y_start ** 2) - 2 * position_y_start * acceleration_y
+    assert discriminant >= 0, "Check your vertical acceleration value (should be <0)."
+    time_1 = 1 / acceleration_y * (-speed_y_start + math.sqrt(discriminant))
+    time_2 = 1 / acceleration_y * (-speed_y_start - math.sqrt(discriminant))
+    print(time_1, time_2)
+    assert time_1 < 0 or time_2 < 0, "Make sure the mass starts moving above the ground."
     return time_2
 
 
@@ -140,7 +144,7 @@ def get_y_of_t(position_y_start: float, speed_y_start: float, acceleration_y: fl
     :return: y(t): Callable[[float], float], in [[s], m]
     """
     def y(t: float) -> float:
-        return 1/2 * acceleration_y * t**2 + speed_y_start * t + position_y_start
+        return 1/2 * acceleration_y * (t**2) + speed_y_start * t + position_y_start
 
     return y
 
@@ -158,10 +162,10 @@ def get_y_of_x(
     :return: y(x): Callable[[float], float], in [[m], m]
     """
     def y(x: float) -> float:
-        a = 1/2 * acceleration_y / speed_start[0]**2
-        b = speed_start[1] / speed_start[0] - acceleration_y * point_start[0] / speed_start[0]**2
-        c = point_start[1] - speed_start[1] / speed_start[0] * point_start[0] + acceleration_y / speed_start[0]**2 * point_start[0]**2
-        return a * x**2 + b * x + c
+        a = 1/2 * acceleration_y / (speed_start[0]**2)
+        b = speed_start[1] / speed_start[0] - acceleration_y * point_start[0] / (speed_start[0]**2)
+        c = point_start[1] - speed_start[1] / speed_start[0] * point_start[0] + 1/2 * acceleration_y * (point_start[0]**2) / (speed_start[0]**2)
+        return a * (x**2) + b * x + c
 
     return y
 
@@ -228,14 +232,16 @@ if __name__ == "__main__":
         point_start=point_start
     )
 
-    ts = np.linspace(0.0, time_ground + 0.3, num=420)
-    xs = np.linspace(-cup_elevation, 0.01, num=410)
+    ts = np.linspace(0.0, time_ground, num=420)
+    xs = np.linspace(point_start[0], point_ground[0], num=420)
     yts = [func_y_of_t(t) for t in ts]
     yxs = [func_y_of_x(x) for x in xs]
 
     print(func_y_of_x(0))
 
     fig, ax = plt.subplots()
-    # ax.plot(ts, yts)
+    ax.grid(alpha=0.5)
+    ax.plot(ts, yts)
     ax.plot(xs, yxs)
-    # plt.show()
+    ax.axhline(y=0.0, color='r', linestyle='-')
+    plt.show()
