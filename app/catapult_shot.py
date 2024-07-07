@@ -32,14 +32,14 @@ def calculate_bungee_diff_squares(
         point_elevation=bungee_position,
         arm_angle=release_angle
     )
-    print(f'x_release: {x_release} \n y_release: {y_release}')
+    # print(f'x_release: {x_release} \n y_release: {y_release}')
 
     x_firing, y_firing = get_arm_point(
         axle_distance=axle_distance,
         point_elevation=bungee_position,
         arm_angle=firing_angle
     )
-    print(f'x_firing: {x_firing} \n y_firing: {y_firing}')
+    # print(f'x_firing: {x_firing} \n y_firing: {y_firing}')
 
     x_pin = 0.0
     y_pin = pin_elevation
@@ -49,7 +49,7 @@ def calculate_bungee_diff_squares(
 
     s_release = (length_release > rest_length) * (length_release - rest_length)
     s_firing = (length_firing > rest_length) * (length_firing - rest_length)
-    print(length_release, length_firing)
+    # print(length_release, length_firing)
     return (s_release ** 2) - (s_firing ** 2)
 
 
@@ -73,7 +73,7 @@ def calculate_omega(
     """
     spring_energy = spring_constant * difference_s_squares
     kinetic_divisor = mass_payload * (mass_distance ** 2) + arm_moment_of_inertia
-    print(difference_s_squares, spring_energy, kinetic_divisor)
+    # print(difference_s_squares, spring_energy, kinetic_divisor)
     omega = math.sqrt(spring_energy/kinetic_divisor)
     return omega
 
@@ -102,7 +102,7 @@ def get_arm_point(
     """
     x = - axle_distance + math.cos(math.radians(arm_angle)) * point_elevation
     y = math.sin(math.radians(arm_angle)) * point_elevation
-    print("get arm pos: ", axle_distance, point_elevation, arm_angle, x, y)
+    # print("get arm pos: ", axle_distance, point_elevation, arm_angle, x, y)
     return x, y
 
 
@@ -130,7 +130,7 @@ def calculate_time_to_ground(acceleration_y: float, speed_y_start: float, positi
     assert discriminant >= 0, "Check your vertical acceleration value (should be <0)."
     time_1 = 1 / acceleration_y * (-speed_y_start + math.sqrt(discriminant))
     time_2 = 1 / acceleration_y * (-speed_y_start - math.sqrt(discriminant))
-    print(time_1, time_2)
+    # print(time_1, time_2)
     assert time_1 < 0 or time_2 < 0, "Make sure the mass starts moving above the ground."
     return time_2
 
@@ -170,6 +170,15 @@ def get_y_of_x(
     return y
 
 
+def calculate_max_height(
+        start_y_position: float,
+        start_y_speed: float,
+        acceleration_y: float
+) -> float:
+    max_height = start_y_position - 1/2 * (start_y_speed**2) / acceleration_y
+    return max_height
+
+
 if __name__ == "__main__":
     g = 9.81                            # m/s^2         - Free fall acceleration
     D = 85.4                            # N/m           - Spring constant
@@ -205,13 +214,15 @@ if __name__ == "__main__":
         arm_moment_of_inertia=J
     )
 
-    print(f'omega is: {omega}')
+    # print(f'omega is: {omega}')
     velocity_start = omega * cup_elevation
     point_start = get_arm_point(
         axle_distance=axle_distance,
         point_elevation=cup_elevation,
         arm_angle=firing_angle
     )
+
+    point_start = (point_start[0], point_start[1] + height_offset)
     angle_start = calculate_mass_starting_angle(firing_angle=firing_angle)
     speed_x_start, speed_y_start = get_speed_components(velocity=velocity_start, angle=angle_start)
 
@@ -237,7 +248,9 @@ if __name__ == "__main__":
     yts = [func_y_of_t(t) for t in ts]
     yxs = [func_y_of_x(x) for x in xs]
 
-    print(func_y_of_x(0))
+    # print(func_y_of_x(0))
+    # print(point_start[1])
+    # print(point_ground[0])
 
     fig, ax = plt.subplots()
     ax.grid(alpha=0.5)
