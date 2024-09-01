@@ -1,11 +1,19 @@
 import argparse
 import os
 import pandas as pd
+import datetime
 
 from app.configured_shot import simulate
 
-
+# TODO:
+# - create pydantic type for experiment with default values
+# - create module to convert to excel DB format
+# - add units handling
 if __name__ == "__main__":
+    start_time = datetime.datetime.now()
+    loaded_time = None
+    executed_fully_time = None
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-file", help="provide file path to input file")
 
@@ -22,6 +30,8 @@ if __name__ == "__main__":
                                             "or that it is located under /data/input.csv"
 
     input_df = pd.read_csv(input_file_path, header=0, index_col=0)
+
+    loaded_time = datetime.datetime.now()
 
     delta_columns = [col for col in input_df.columns if 'delta' in col]
     core_columns = [col for col in input_df.columns if 'delta' not in col]
@@ -43,3 +53,9 @@ if __name__ == "__main__":
     output_df.set_index('Index', inplace=True)
 
     output_df.to_csv(output_path)
+
+    executed_fully_time = datetime.datetime.now()
+
+    print(f"Time taken to load data: {loaded_time - start_time}")
+    print(f"Time taken to process data: {executed_fully_time - loaded_time}")
+    print(f"Time taken for the whole process: {executed_fully_time - start_time}")
