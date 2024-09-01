@@ -11,7 +11,7 @@ class SimulationConfig(BaseModel):
     @computed_field
     @property
     def m(self) -> float:
-        m = self.m_ball + self.m_cup        # kg            - Total mass of cup and ball
+        return self.m_ball + self.m_cup                 # kg            - Total mass of cup and ball
 
     axle_distance: float = 0.158                        # m             - Distance from arm till rubber band
     bungee_length_no_load: float = 0.310 + 0.055        # m             - Bungee length at rest
