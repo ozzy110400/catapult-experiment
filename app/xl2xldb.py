@@ -7,6 +7,7 @@ import os
 DB_PATH = "../data/db/db.xlsx"
 TEMPLATE_PATH = "../data/db/doe_template.xlsx"
 FILES_DIR = "../data/simulations/generated/xlsx"
+METADATA_DIR = "../data/simulations/generated/metadata"
 
 PREFIX = "Year_2024_Olzhas_BA"
 
@@ -83,6 +84,9 @@ if __name__ == "__main__":
 
         df = pd.read_excel(os.path.join(FILES_DIR, fn), header=0, converters=CONVERTERS, index_col=0)
 
+        metadata_file_name = fn.split(".")[0] + ".csv"
+        metadata_df = pd.read_csv(os.path.join(METADATA_DIR, metadata_file_name), index_col=0)
+
         run_number = 1
 
         factors = [c for c in df.columns if c not in RESPONSES]
@@ -112,12 +116,14 @@ if __name__ == "__main__":
         # ConstraintsFormula
         ws_info[f"G{design_row}"] = "(FA-RA) <= (15) or (CE-BP) < (35)"
 
-        # DesignType - filled in manually
+        # DesignType
+        ws_info[f"H{design_row}"] = metadata_df.loc[0, "Design"]
 
-        # Candidates - filled in manually
+        # Candidates
+        ws_info[f"I{design_row}"] = metadata_df.loc[0, "Candidates"]
 
         # RunOrder
-        ws_info[f"J{design_row}"] = "Randomized"
+        ws_info[f"J{design_row}"] = metadata_df.loc[0, "Run Order"]
 
         # InformationIndex
         ws_info[f"K{design_row}"] = 0
@@ -125,7 +131,8 @@ if __name__ == "__main__":
         # ModelType
         ws_info[f"L{design_row}"] = "User-defined"
 
-        # ModelTerms - filled in manually
+        # ModelTerms
+        ws_info[f"M{design_row}"] = metadata_df.loc[0, "Terms"]
 
         # Documentation - left empty
 
@@ -226,5 +233,5 @@ if __name__ == "__main__":
 
     print("===============================-Success!-===============================")
     print("Data successfully was converted to DB.")
-    print(f"Amount of converted designs: {design_row - 1}")
+    print(f"Amount of converted designs: {design_row - 2}")
     print("========================================================================")

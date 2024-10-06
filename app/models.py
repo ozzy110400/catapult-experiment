@@ -2,11 +2,11 @@ from pydantic import BaseModel, computed_field
 
 
 class SimulationConfig(BaseModel):
-    g: float = 9.81                         # m/s^2         - Free fall acceleration
-    spring_constant: float = 85.4                         # N/m           - Spring constant
-    moment_of_inertia: float = 1 / 3 * 0.156 * 0.346 ** 2   # kg*m^2        - Moment of inertia of the catapult arm
-    cup_mass: float = 0.027                    # kg            - Cup mass
-    ball_mass: float = 0.00267                 # kg            - Ball mass
+    g: float = 9.81                                             # m/s^2         - Free fall acceleration
+    spring_constant: float = 85.4                               # N/m           - Spring constant
+    moment_of_inertia: float = 1 / 3 * 0.156 * 0.346 ** 2       # kg*m^2        - Moment of inertia of the catapult arm
+    cup_mass: float = 0.027                                     # kg            - Cup mass
+    ball_mass: float = 0.00267                                  # kg            - Ball mass
 
     # Total mass is calculated in configured_shot.py module
 

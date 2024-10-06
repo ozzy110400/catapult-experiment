@@ -2,6 +2,7 @@ import argparse
 import os
 import pandas as pd
 import numpy as np
+import glob
 
 from app.configured_shot import simulate
 from models import FullSimulationConfig, SimulationConfig
@@ -22,7 +23,6 @@ CONVERTING_MAP = {
     "BP": mm_to_m,
 }
 
-
 RENAMING_MAP = {
     "BA": "ball_mass",
     "FA": "firing_angle",
@@ -36,9 +36,7 @@ RENAMING_MAP = {
     "MH": "max_height"
 }
 
-
 REVERSE_NAMING_MAP = {v: k for k, v in RENAMING_MAP.items()}
-
 
 # Dict with amplitudes of deltas in percentages for maximum possible deviation
 # Change / Comment before run
@@ -60,102 +58,151 @@ DELTAS = {
     "delta_release_angle": 0.05,
 
     # The only delta factor without core counterpart, and in degrees
-    "lateral_deviation_angle": 0.05 * 30    # degrees
+    "lateral_deviation_angle": 0.05 * 30  # degrees
 }
 
+ALL_FACTORS = [
+    'ball_mass',
+    'firing_angle',
+    'release_angle',
+    'cup_elevation',
+    'pin_elevation',
+    'bungee_position'
+]
 
 # TODO:
 # [x] - create pydantic type for experiment with default values
-# - create module to convert to excel DB format
+# [x] - create module to convert to excel DB format
 # [x] - add units handling
+# - If the value is const, add a little jitter: 10^-6
+# [x] - Make a unified structure for data concatenation from different experiments
+# - Run identifier to be added to the output .xlsx file
+# - Not to vary too much -> if finish with rect only then go to normal distribution
+# - Start with absolute value of the stiffness before looking at jitter
 if __name__ == "__main__":
     # Set up seed for random generator
     np.random.seed(43)
-
-    loaded_time = None
-    executed_fully_time = None
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-file", help="provide file path to input file")
 
     default_input_dir = "../data/simulations/raw"
-    default_input_file_name = "test_1.xlsx"
-    # Change before run ~~~~~~~^^^^^^^^^^^
-    default_input_path = os.path.join(default_input_dir, default_input_file_name)
-
     default_output_dir = "../data/simulations/generated"
-    default_output_file_name = f"output-{default_input_file_name}"
-    default_output_path = os.path.join(default_output_dir, 'xlsx', default_output_file_name)
-    csv_output_file_name = f"{default_output_file_name.split('.')[0]}.csv"
-    csv_output_path = os.path.join(default_output_dir, 'csv', csv_output_file_name)
 
-    args = parser.parse_args()
+    # Get all the files in the input directory
+    filenames = glob.glob("*.xlsx", root_dir=default_input_dir)
+    experiments_count = 0
 
-    input_file_path = default_input_path
-    if args.input_file is not None:
-        input_file_path = args.input_file
+    for input_file_name in filenames:
+        # Skip temporary excel files
+        if "~$" in input_file_name:
+            continue
 
-    assert os.path.isfile(input_file_path), "Input file could not be located. Make sure to provide valid path, " \
-                                            "or that it is located under /data/input.csv"
+        input_path = os.path.join(default_input_dir, input_file_name)
 
-    input_df = pd.read_excel(input_file_path, header=0, converters=CONVERTING_MAP)
-    input_df = input_df.rename(mapper=RENAMING_MAP, axis="columns")
+        # Output paths
+        default_output_file_name = f"output-{input_file_name}"
+        default_output_path = os.path.join(default_output_dir, 'xlsx', default_output_file_name)
 
-    input_columns = list(input_df.columns)
+        csv_output_file_name = f"{default_output_file_name.split('.')[0]}.csv"
+        csv_output_path = os.path.join(default_output_dir, 'csv', csv_output_file_name)
 
-    outputs_only = []
-    io_only = []
-    extended_ls = []
+        metadata_output_file_name = f"{default_output_file_name.split('.')[0]}.csv"
+        metadata_output_path = os.path.join(default_output_dir, 'metadata', metadata_output_file_name)
 
-    output_columns = None
-    for index, df_row in input_df.iterrows():
-        fl_model = FullSimulationConfig(**df_row.to_dict())
+        # Legacy argparser. It should not be used until an update
+        args = parser.parse_args()
 
-        input_dict = {k: v for k, v in fl_model.model_dump().items() if 'delta' not in k}
-        deltas_dict = DELTAS
+        input_file_path = input_path
+        if args.input_file is not None:
+            input_file_path = args.input_file
 
-        chosen_deltas = {}
-        initial_inputs = input_dict.copy()
+        assert os.path.isfile(input_file_path), "Input file could not be located. Make sure to provide valid path, " \
+                                                "or that it is located under /data/input.csv"
 
-        for k_delta, v_delta in deltas_dict.items():
-            relative_delta = np.random.uniform(-1 * v_delta, v_delta)
+        input_df = pd.read_excel(input_file_path, header=0, converters=CONVERTING_MAP)
+        input_df = input_df.rename(mapper=RENAMING_MAP, axis="columns")
 
-            chosen_deltas[f"{k_delta}_chosen"] = relative_delta
+        # Meta-data information df
+        metadata_df = pd.read_excel(input_file_path, sheet_name="Meta-data")
 
-            k_core = k_delta[6:]
-            if k_delta != "lateral_deviation_angle":
-                input_dict[k_core] = input_dict[k_core] + input_dict[k_core] * relative_delta
-            else:
-                input_dict[k_delta] = relative_delta
+        # Insert file_name into meta-data df
+        metadata_df['Experiment Identifier'] = input_file_name.split('.')[0]
 
-        # Adjust firing and release angles due to difference of starting point and direction of angle calculation
-        input_dict['release_angle'] = 180 - input_dict['release_angle']
-        input_dict['firing_angle'] = 180 - input_dict['firing_angle']
+        # Deltas information df
+        deltas_information_df = pd.read_excel(input_file_path, sheet_name="deltas_for_design")
 
-        output_simulation = simulate(input_dict)
-        # Set output columns names
-        if output_columns is None:
-            output_columns = output_simulation.keys()
-        output_simulation['Index'] = index
+        # Factors chosen in the design
+        design_input_columns = list(input_df.columns)
+        # List of all possible factors
+        input_columns = ALL_FACTORS
+        # Set of factors not chosen in the design
+        const_input_columns = set(input_columns) - set(design_input_columns)
 
-        io_data = {**output_simulation, **initial_inputs}
-        extended_data = {**io_data, **chosen_deltas}
+        outputs_only = []
+        io_only = []
+        extended_ls = []
 
-        outputs_only.append(output_simulation)
-        io_only.append(io_data)
-        extended_ls.append(extended_data)
+        output_columns = None
+        for index, df_row in input_df.iterrows():
+            fl_model = FullSimulationConfig(**df_row.to_dict())
 
-    assert output_columns is not None, "Column names for the outputs were not inferred"
-    output_df = pd.DataFrame(io_only, columns=[*input_columns, *output_columns])
-    output_df.set_index('Index', inplace=True)
-    output_df = output_df.rename(REVERSE_NAMING_MAP, axis='columns')
-    output_df.to_excel(default_output_path)
+            # Necessary data for simulation
+            input_dict = {k: v for k, v in fl_model.model_dump().items() if 'delta' not in k}
+            deltas_dict = deltas_information_df.loc[0].to_dict()
 
-    extended_df = pd.DataFrame(extended_ls)
-    extended_df.set_index('Index', inplace=True)
-    extended_df.to_csv(csv_output_path)
+            # Data going to output files
+            chosen_deltas = {}
+            initial_inputs = input_dict.copy()
+            initial_inputs['Experiment Identifier'] = metadata_df.loc[0, 'Experiment Identifier']
+
+            for k_delta, v_delta in deltas_dict.items():
+                relative_delta = np.random.uniform(-1 * v_delta, v_delta)
+
+                chosen_deltas[f"{k_delta}_chosen"] = relative_delta
+
+                k_core = k_delta[6:]
+                if k_delta != "lateral_deviation_angle":
+                    input_dict[k_core] = input_dict[k_core] + input_dict[k_core] * relative_delta
+                else:
+                    input_dict[k_delta] = relative_delta
+
+            # Adjust firing and release angles due to difference of starting point and direction of angle calculation
+            input_dict['release_angle'] = 180 - input_dict['release_angle']
+            input_dict['firing_angle'] = 180 - input_dict['firing_angle']
+
+            output_simulation = simulate(input_dict)
+
+            # Set output columns names
+            if output_columns is None:
+                output_columns = output_simulation.keys()
+            output_simulation['Index'] = index
+
+            io_data = {**output_simulation, **initial_inputs}
+            extended_data = {**io_data, **chosen_deltas}
+
+            outputs_only.append(output_simulation)
+            io_only.append(io_data)
+            extended_ls.append(extended_data)
+
+        assert output_columns is not None, "Column names for the outputs were not inferred"
+        output_df = pd.DataFrame(io_only, columns=[*input_columns, *output_columns, 'Experiment Identifier'])
+        output_df.set_index('Index', inplace=True)
+        output_df = output_df.rename(REVERSE_NAMING_MAP, axis='columns')
+        output_df.to_excel(default_output_path)
+
+        # Stacking data in all runs data file
+
+
+        extended_df = pd.DataFrame(extended_ls)
+        extended_df.set_index('Index', inplace=True)
+        extended_df.to_csv(csv_output_path)
+
+        metadata_df.to_csv(metadata_output_path)
+
+        experiments_count += 1
 
     print("===============================-Success!-===============================")
-    print(f"Data has been generated for an experiment with the following name: {default_input_file_name.split('.')[0]}")
+    print(f"Data has been generated for {experiments_count} experiments")
     print(f"Find respective generated files in the following directory: {os.path.abspath(default_output_dir)}")
     print("========================================================================")
