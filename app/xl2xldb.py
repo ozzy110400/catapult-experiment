@@ -89,13 +89,13 @@ if __name__ == "__main__":
 
         run_number = 1
 
-        factors = [c for c in df.columns if c not in RESPONSES]
+        factors = [c for c in df.columns if c not in ["Experiment Identifier", *RESPONSES]]
 
         # ----- Design Info filling -----
         ws_info = wb["DesignInfo"]
 
         # Design name
-        design_name = f"{PREFIX}_{fn.split('.')[0].split('_')[-1]}"
+        design_name = f"{PREFIX}_{''.join(fn.split('.')[0].split('_')[1:])}"
         ws_info[f"A{design_row}"] = design_name
 
         # Factors
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         ws_info[f"F{design_row}"] = 2
 
         # ConstraintsFormula
-        ws_info[f"G{design_row}"] = "(FA-RA) <= (15) or (CE-BP) < (35)"
+        ws_info[f"G{design_row}"] = "(FA-RA) <= (15) or (CE-BP) < (35)" if metadata_df.loc[0, "Constraints"] else ""
 
         # DesignType
         ws_info[f"H{design_row}"] = metadata_df.loc[0, "Design"]
